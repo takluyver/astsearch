@@ -166,9 +166,11 @@ def main(argv=None):
         if filepath != current_filepath:
             with open(filepath, 'r') as f:  # TODO: detect encoding
                 current_filelines = f.readlines()
+            if current_filepath is not None:
+                print()  # Blank line between files
             current_filepath = filepath
             print(filepath)
-        print("{:>4}:{}".format(node.lineno, current_filelines[node.lineno-1].rstrip()))
+        print("{:>4}|{}".format(node.lineno, current_filelines[node.lineno-1].rstrip()))
 
 if __name__ == '__main__':
     main()
