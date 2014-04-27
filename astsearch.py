@@ -79,8 +79,11 @@ def prepare_pattern(s):
 def main(argv=None):
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument('pattern')
-    ap.add_argument('--debug', action='store_true')
+    ap.add_argument('pattern',
+                    help="AST pattern to search for; see docs for examples")
+    ap.add_argument('path', nargs='?', default='.',
+                    help="file or directory to search in")
+    ap.add_argument('--debug', action='store_true', help=argparse.SUPPRESS)
     
     args = ap.parse_args(argv)
     ast_pattern = prepare_pattern(args.pattern)
@@ -89,7 +92,7 @@ def main(argv=None):
     
     current_filepath = None
     current_filelines = []
-    for filepath, node in scan_directory(ast_pattern, '.'):
+    for filepath, node in scan_directory(ast_pattern, args.path):
         if filepath != current_filepath:
             with open(filepath, 'r') as f:  # TODO: detect encoding
                 current_filelines = f.readlines()
