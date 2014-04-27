@@ -2,44 +2,56 @@ import astcheck, ast
 import os.path
 import warnings
 
-def scan_ast(pattern, tree):
-    """Walk an AST and yield any nodes matching pattern.
+class ASTPatternFinder(object):
+    """Scans Python code for AST nodes matching pattern.
     
     :param ast.AST pattern: The node pattern to search for
-    :param ast.AST tree: The AST in which to search
     """
-    nodetype = type(pattern)
-    for node in ast.walk(tree):
-        if isinstance(node, nodetype) and astcheck.is_ast_like(node, pattern):
-            yield node
+    def __init__(self, pattern):
+        self.pattern = pattern
 
-def scan_file(pattern, filename):
-    """Parse a file and yield AST nodes matching pattern.
-    
-    :param ast.AST pattern: The node pattern to search for
-    :param str filename: Path to a Python file
-    """
-    with open(filename, 'rb') as f:
-        tree = ast.parse(f.read())
-    yield from scan_ast(pattern, tree)
+    def scan_ast(self, tree):
+        """Walk an AST and yield nodes matching pattern.
+        
+        :param ast.AST pattern: The node pattern to search for
+        :param ast.AST tree: The AST in which to search
+        """
+        nodetype = type(self.pattern)
+        for node in ast.walk(tree):
+            if isinstance(node, nodetype) and astcheck.is_ast_like(node, self.pattern):
+                yield node
 
-def scan_directory(pattern, directory):
-    """Walk files in a directory, yielding (filename, node) pairs matching pattern.
+    def scan_file(self, filename):
+        """Parse a file and yield AST nodes matching pattern.
+        
+        :param str filename: Path to a Python file
+        """
+        with open(filename, 'rb') as f:
+            tree = ast.parse(f.read())
+        yield from self.scan_ast(tree)
     
-    :param ast.AST pattern: The node pattern to search for
-    :param str directory: Path to a directory to search
-    
-    Only files with a ``.py`` or ``.pyw`` extension will be scanned.
-    """
-    for dirpath, dirnames, filenames in os.walk(directory):
-        for filename in filenames:
-            if filename.endswith(('.py', '.pyw')):
-                filepath = os.path.join(dirpath, filename)
-                try:
-                    for match in scan_file(pattern, filepath):
-                        yield filepath, match
-                except SyntaxError as e:
-                    warnings.warn("Failed to parse {}:\n{}".format(filepath, e))
+    def filter_subdirs(self, dirnames):
+        dirnames[:] = [d for d in dirnames if d != 'build']
+
+    def scan_directory(self, directory):
+        """Walk files in a directory, yielding (filename, node) pairs matching
+        pattern.
+        
+        :param str directory: Path to a directory to search
+        
+        Only files with a ``.py`` or ``.pyw`` extension will be scanned.
+        """
+        for dirpath, dirnames, filenames in os.walk(directory):
+            self.filter_subdirs(dirnames)
+
+            for filename in filenames:
+                if filename.endswith(('.py', '.pyw')):
+                    filepath = os.path.join(dirpath, filename)
+                    try:
+                        for match in self.scan_file(filepath):
+                            yield filepath, match
+                    except SyntaxError as e:
+                        warnings.warn("Failed to parse {}:\n{}".format(filepath, e))
 
 
 WILDCARD_NAME = "__astsearch_wildcard"
@@ -150,7 +162,7 @@ def main(argv=None):
     
     current_filepath = None
     current_filelines = []
-    for filepath, node in scan_directory(ast_pattern, args.path):
+    for filepath, node in ASTPatternFinder(ast_pattern).scan_directory(args.path):
         if filepath != current_filepath:
             with open(filepath, 'r') as f:  # TODO: detect encoding
                 current_filelines = f.readlines()
