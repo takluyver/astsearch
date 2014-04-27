@@ -53,10 +53,29 @@ class TemplatePruner(ast.NodeTransformer):
         # interchangeable.
         return astcheck.name_or_attr(node.id)
     
+    def prune_wildcard(self, node, attrname):
+        if getattr(node, attrname, None) == WILDCARD_NAME:
+            delattr(node, attrname)
+
     def visit_Attribute(self, node):
-        if node.attr == WILDCARD_NAME:
-            del node.attr
-        return node
+        self.prune_wildcard(node, 'attr')
+        return self.generic_visit(node)
+
+    def visit_keyword(self, node):
+        self.prune_wildcard(node, 'arg')
+        return self.generic_visit(node)
+
+    def visit_FunctionDef(self, node):
+        self.prune_wildcard(node, 'name')
+        return self.generic_visit(node)
+
+    def visit_arg(self, node):
+        self.prune_wildcard(node, 'arg')
+        return self.generic_visit(node)
+
+    def visit_ClassDef(self, node):
+        self.prune_wildcard(node, 'name')
+        return self.generic_visit(node)
 
     def generic_visit(self, node):
         # Copied from ast.NodeTransformer; changes marked PATCH
@@ -64,19 +83,30 @@ class TemplatePruner(ast.NodeTransformer):
             old_value = getattr(node, field, None)
             if isinstance(old_value, list):
                 new_values = []
-                for value in old_value:
-                    if isinstance(value, ast.AST):
-                        value = self.visit(value)
-                        if value is None:
-                            continue
-                        # PATCH: We want to put functions in the AST
-                        elif isinstance(value, list): #not isinstance(value, ast.AST):
-                            new_values.extend(value)
-                            continue
-                    new_values.append(value)
+                # PATCH: If wildcard is whole body of function/loop/etc,
+                # don't check the block at all.
+                if len(old_value) == 1 and isinstance(old_value[0], ast.AST) \
+                        and astcheck.is_ast_like(old_value[0],
+                             ast.Expr(value=ast.Name(id=WILDCARD_NAME))):
+                    pass
+                # -----------
+                else:
+                    for value in old_value:
+                        if isinstance(value, ast.AST):
+                            value = self.visit(value)
+                            if value is None:
+                                continue
+                            # PATCH: We want to put checker functions in the AST
+                            #elif not isinstance(value, ast.AST):
+                            elif isinstance(value, list):
+                                # -------
+                                new_values.extend(value)
+                                continue
+                        new_values.append(value)
                 # PATCH: Delete field if list is empty
                 if not new_values:
                     delattr(node, field)
+                # ------
                 old_value[:] = new_values
             elif isinstance(old_value, ast.AST):
                 new_node = self.visit(old_value)
