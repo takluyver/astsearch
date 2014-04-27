@@ -3,17 +3,34 @@ import os.path
 import warnings
 
 def scan_ast(pattern, tree):
+    """Walk an AST and yield any nodes matching pattern.
+    
+    :param ast.AST pattern: The node pattern to search for
+    :param ast.AST tree: The AST in which to search
+    """
     nodetype = type(pattern)
     for node in ast.walk(tree):
         if isinstance(node, nodetype) and astcheck.is_ast_like(node, pattern):
             yield node
 
 def scan_file(pattern, filename):
+    """Parse a file and yield AST nodes matching pattern.
+    
+    :param ast.AST pattern: The node pattern to search for
+    :param str filename: Path to a Python file
+    """
     with open(filename, 'rb') as f:
         tree = ast.parse(f.read())
     yield from scan_ast(pattern, tree)
 
 def scan_directory(pattern, directory):
+    """Walk files in a directory, yielding (filename, node) pairs matching pattern.
+    
+    :param ast.AST pattern: The node pattern to search for
+    :param str directory: Path to a directory to search
+    
+    Only files with a ``.py`` or ``.pyw`` extension will be scanned.
+    """
     for dirpath, dirnames, filenames in os.walk(directory):
         for filename in filenames:
             if filename.endswith(('.py', '.pyw')):
@@ -70,6 +87,13 @@ class TemplatePruner(ast.NodeTransformer):
         return node
 
 def prepare_pattern(s):
+    """Turn a string pattern into an AST pattern
+    
+    This parses the string to an AST, and generalises it a bit for sensible
+    matching. ``?`` is treated as a wildcard that matches anything. Names in
+    the pattern will match names or attribute access (i.e. ``foo`` will match
+    ``bar.foo`` in files).
+    """
     s = s.replace('?', WILDCARD_NAME)
     pattern = ast.parse(s).body[0]
     if isinstance(pattern, ast.Expr):
@@ -77,6 +101,10 @@ def prepare_pattern(s):
     return TemplatePruner().visit(pattern)
 
 def main(argv=None):
+    """Run astsearch from the command line.
+    
+    :param list argv: Command line arguments; defaults to :data:`sys.argv`
+    """
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('pattern',
