@@ -1,0 +1,4 @@
+#!/usr/bin/python3
+"""Command line entry point for astsearch"""
+from astsearch import main
+main()
