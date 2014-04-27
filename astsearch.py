@@ -1,5 +1,6 @@
 import astcheck, ast
 import os.path
+import sys
 import warnings
 
 class ASTPatternFinder(object):
@@ -160,17 +161,35 @@ def main(argv=None):
     if args.debug:
         print(ast.dump(ast_pattern))
     
-    current_filepath = None
+    patternfinder = ASTPatternFinder(ast_pattern)
+
+    def _printline(node, filelines):
+        print("{:>4}|{}".format(node.lineno, filelines[node.lineno-1].rstrip()))
+
     current_filelines = []
-    for filepath, node in ASTPatternFinder(ast_pattern).scan_directory(args.path):
-        if filepath != current_filepath:
-            with open(filepath, 'r') as f:  # TODO: detect encoding
-                current_filelines = f.readlines()
-            if current_filepath is not None:
-                print()  # Blank line between files
-            current_filepath = filepath
-            print(filepath)
-        print("{:>4}|{}".format(node.lineno, current_filelines[node.lineno-1].rstrip()))
+    if os.path.isdir(args.path):
+        # Search directory
+        current_filepath = None
+        for filepath, node in patternfinder.scan_directory(args.path):
+            if filepath != current_filepath:
+                with open(filepath, 'r') as f:  # TODO: detect encoding
+                    current_filelines = f.readlines()
+                if current_filepath is not None:
+                    print()  # Blank line between files
+                current_filepath = filepath
+                print(filepath)
+            _printline(node, current_filelines)
+
+    elif os.path.exists(args.path):
+        # Search file
+        for node in patternfinder.scan_file(args.path):
+            if not current_filelines:
+                with open(args.path) as f:
+                    current_filelines = f.readlines()
+            _printline(node, current_filelines)
+
+    else:
+        sys.exit("No such file or directory: {}".format(args.path))
 
 if __name__ == '__main__':
     main()
