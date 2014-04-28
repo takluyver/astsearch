@@ -22,12 +22,15 @@ class ASTPatternFinder(object):
             if isinstance(node, nodetype) and astcheck.is_ast_like(node, self.pattern):
                 yield node
 
-    def scan_file(self, filename):
+    def scan_file(self, file):
         """Parse a file and yield AST nodes matching pattern.
         
-        :param str filename: Path to a Python file
+        :param file: Path to a Python file, or a readable file object
         """
-        with open(filename, 'rb') as f:
+        if isinstance(file, str):
+            with open(file, 'rb') as f:
+                tree = ast.parse(f.read())
+        else:
             tree = ast.parse(f.read())
         yield from self.scan_ast(tree)
     
