@@ -31,7 +31,7 @@ class ASTPatternFinder(object):
             with open(file, 'rb') as f:
                 tree = ast.parse(f.read())
         else:
-            tree = ast.parse(f.read())
+            tree = ast.parse(file.read())
         yield from self.scan_ast(tree)
     
     def filter_subdirs(self, dirnames):

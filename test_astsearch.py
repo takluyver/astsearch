@@ -1,4 +1,5 @@
 import ast
+from io import StringIO
 import types
 import unittest
 
@@ -34,3 +35,49 @@ class PreparePatternTests(unittest.TestCase):
         pat = prepare_pattern('a = 1')
         assert_ast_like(pat, ast.Assign(value=ast.Num(1)))
         assert isinstance(pat.targets[0], types.FunctionType)
+
+division_sample = """#!/usr/bin/python3
+'not / division'
+1/2
+a.b/c
+# 5/6
+78//8  # FloorDiv is not the same
+
+def divide(x, y):
+    return x/y
+"""
+
+if_sample = """
+if a:
+    pass
+else:
+    pass
+
+if b:
+    pass
+"""
+
+class PatternFinderTests(unittest.TestCase):
+    def assert_no_more(self, it):
+        with self.assertRaises(StopIteration):
+            next(it)
+
+    def test_plain(self):
+        pat = ast.BinOp(left=ast.Num(1), right=ast.Num(2), op=ast.Div())
+        it = ASTPatternFinder(pat).scan_file(StringIO(division_sample))
+        assert next(it).left.n == 1
+        self.assert_no_more(it)
+
+    def test_all_divisions(self):
+        pat = ast.BinOp(op=ast.Div())
+        it = ASTPatternFinder(pat).scan_file(StringIO(division_sample))
+        assert_ast_like(next(it), ast.BinOp(left=ast.Num(n=1)))
+        assert_ast_like(next(it), ast.BinOp(right=ast.Name(id='c')))
+        assert_ast_like(next(it), ast.BinOp(left=ast.Name(id='x')))
+        self.assert_no_more(it)
+
+    def test_block_must_exist(self):
+        pat = ast.If(orelse=must_exist_checker)
+        it = ASTPatternFinder(pat).scan_file(StringIO(if_sample))
+        assert_ast_like(next(it), ast.If(test=ast.Name(id='a')))
+        self.assert_no_more(it)
