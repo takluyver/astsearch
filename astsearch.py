@@ -14,7 +14,6 @@ class ASTPatternFinder(object):
     def scan_ast(self, tree):
         """Walk an AST and yield nodes matching pattern.
         
-        :param ast.AST pattern: The node pattern to search for
         :param ast.AST tree: The AST in which to search
         """
         nodetype = type(self.pattern)
