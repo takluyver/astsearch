@@ -62,11 +62,17 @@ def must_exist_checker(node, path):
         raise astcheck.ASTMismatch(path, node, "non empty")
 
 WILDCARD_NAME = "__astsearch_wildcard"
+MULTIWILDCARD_NAME = "__astsearch_multiwildcard"
 
 class TemplatePruner(ast.NodeTransformer):
     def visit_Name(self, node):
         if node.id == WILDCARD_NAME:
-            return None  # Remove node to allow any object
+            return must_exist_checker  # Allow any node type for a wildcard
+        elif node.id == MULTIWILDCARD_NAME:
+            # This shouldn't happen, but users will probably confuse their
+            # wildcards at times. If it's in a block, it should have been
+            # transformed before it's visited.
+            return must_exist_checker
         
         # Generalise names to allow attributes as well, because these are often
         # interchangeable.
@@ -74,15 +80,25 @@ class TemplatePruner(ast.NodeTransformer):
     
     def prune_wildcard(self, node, attrname, must_exist=False):
         """Prunes a plain string attribute if it matches WILDCARD_NAME"""
-        if getattr(node, attrname, None) == WILDCARD_NAME:
+        if getattr(node, attrname, None) in (WILDCARD_NAME, MULTIWILDCARD_NAME):
             setattr(node, attrname, must_exist_checker)
 
     def prune_wildcard_body(self, node, attrname, must_exist=False):
         """Prunes a code block (e.g. function body) if it is a wildcard"""
         body = getattr(node, attrname, [])
-        if len(body) == 1 and astcheck.is_ast_like(body[0],
-                ast.Expr(value=ast.Name(id=WILDCARD_NAME))):
+        def _is_multiwildcard(n):
+            return astcheck.is_ast_like(n,
+                            ast.Expr(value=ast.Name(id=MULTIWILDCARD_NAME)))
+
+        if len(body) == 1 and _is_multiwildcard(body[0]):
             setattr(node, attrname, must_exist_checker)
+            return
+
+        # Find a ?? node within the block, and replace it with listmiddle
+        for i, n in enumerate(body):
+            if _is_multiwildcard(n):
+                newbody = body[:i] + astcheck.listmiddle() + body[i+1:]
+                setattr(node, attrname, newbody)
 
     def visit_Attribute(self, node):
         self.prune_wildcard(node, 'attr')
@@ -109,18 +125,22 @@ class TemplatePruner(ast.NodeTransformer):
         return self.generic_visit(node)
 
     # All of these have body & orelse node lists
-    visit_For = visit_While = visit_TryExcept = visit_If
+    visit_For = visit_While = visit_If
 
-    def visit_TryFinally(self, node):
+    def visit_Try(self, node):
         self.prune_wildcard_body(node, 'body')
+        self.prune_wildcard_body(node, 'orelse')
         self.prune_wildcard_body(node, 'finalbody')
+        return self.generic_visit(node)
 
     def visit_ExceptHandler(self, node):
         self.prune_wildcard(node, 'name')
         self.prune_wildcard_body(node, 'body')
+        return self.generic_visit(node)
 
     def visit_With(self, node):
         self.prune_wildcard_body(node, 'body')
+        return self.generic_visit(node)
 
     def generic_visit(self, node):
         # Copied from ast.NodeTransformer; changes marked PATCH
@@ -161,7 +181,7 @@ def prepare_pattern(s):
     the pattern will match names or attribute access (i.e. ``foo`` will match
     ``bar.foo`` in files).
     """
-    s = s.replace('?', WILDCARD_NAME)
+    s = s.replace('??', MULTIWILDCARD_NAME).replace('?', WILDCARD_NAME)
     pattern = ast.parse(s).body[0]
     if isinstance(pattern, ast.Expr):
         pattern = pattern.value
