@@ -19,5 +19,5 @@ setup(name='astsearch',
           'Programming Language :: Python :: 3',
           'Topic :: Software Development :: Libraries :: Python Modules',
       ],
-      install_requires=['astcheck >= 0.2.1'],
+      install_requires=['astcheck >= 0.2.2'],
 )

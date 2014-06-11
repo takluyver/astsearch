@@ -61,6 +61,11 @@ def must_exist_checker(node, path):
     if (node is None) or (node == []):
         raise astcheck.ASTMismatch(path, node, "non empty")
 
+def must_not_exist_checker(node, path):
+    """Checker function to ensure a field is empty"""
+    if (node is not None) and (node != []):
+        raise astcheck.ASTMismatch(path, node, "empty")
+
 WILDCARD_NAME = "__astsearch_wildcard"
 MULTIWILDCARD_NAME = "__astsearch_multiwildcard"
 
@@ -104,10 +109,6 @@ class TemplatePruner(ast.NodeTransformer):
         self.prune_wildcard(node, 'attr')
         return self.generic_visit(node)
 
-    def visit_keyword(self, node):
-        self.prune_wildcard(node, 'arg')
-        return self.generic_visit(node)
-
     def visit_FunctionDef(self, node):
         self.prune_wildcard(node, 'name')
         self.prune_wildcard_body(node, 'body')
@@ -140,6 +141,63 @@ class TemplatePruner(ast.NodeTransformer):
 
     def visit_With(self, node):
         self.prune_wildcard_body(node, 'body')
+        return self.generic_visit(node)
+
+    def visit_Call(self, node):
+        positional_final_wildcard = False
+        for i, n in enumerate(node.args):
+            if astcheck.is_ast_like(n, ast.Name(id=MULTIWILDCARD_NAME)):
+                if i+1 == len(node.args):
+                    # Last positional argument - wildcard may extend to kwargs
+                    positional_final_wildcard = True
+
+                node.args = node.args[:i] + astcheck.listmiddle() + node.args[i+1:]
+
+                # Don't try to handle multiple multiwildcards
+                break
+
+        kwargs_are_subset = False
+        if positional_final_wildcard and node.starargs is None:
+            del node.starargs   # Accept any (or none) *args
+            # f(a, ??) -> wildcarded kwargs as well
+            kwargs_are_subset = True
+
+        if kwargs_are_subset or any(k.arg==MULTIWILDCARD_NAME for k in node.keywords):
+            template_keywords = [self.visit(k) for k in node.keywords
+                                  if k.arg != MULTIWILDCARD_NAME]
+
+            def kwargs_checker(sample_keywords, path):
+                sample_kwargs = {k.arg: k.value for k in sample_keywords}
+
+                for k in template_keywords:
+                    if k.arg == MULTIWILDCARD_NAME:
+                        continue
+                    if k.arg in sample_kwargs:
+                        print(k.value, sample_kwargs[k.arg])
+                        print('checking kw value', k.arg, astcheck.is_ast_like(sample_kwargs[k.arg], k.value))
+                        astcheck.assert_ast_like(sample_kwargs[k.arg], k.value, path+[k.arg])
+                    else:
+                        print('missing kw', k.arg)
+                        raise astcheck.ASTMismatch(path, '(missing)', 'keyword arg %s' % k.arg)
+
+            if template_keywords:
+                node.keywords = kwargs_checker
+            else:
+                # Shortcut if there are no keywords to check
+                del node.keywords
+
+            # Accepting arbitrary keywords, so don't check absence of **kwargs
+            if node.kwargs is None:
+                del node.kwargs
+
+        # In block contexts, we want to avoid checking empty lists (for optional
+        # nodes), but here, an empty list should mean that there are no
+        # arguments in that group. So we need to override the behaviour in
+        # generic_visit
+        if node.args == []:
+            node.args = must_not_exist_checker
+        if getattr(node, 'keywords', None) == []:
+            node.keywords = must_not_exist_checker
         return self.generic_visit(node)
 
     def generic_visit(self, node):
