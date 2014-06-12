@@ -184,3 +184,8 @@ class FuncCallTests(unittest.TestCase, IterTestMixin):
         matches = list(apf.scan_ast(self.ast))
         assert len(matches) == 4
         assert_ast_like(matches[-1], ast.Call(kwargs=ast.Name(id='k')))
+
+    def test_single_and_multi_wildcard(self):
+        apf = ASTPatternFinder(prepare_pattern("f(?, ??)"))
+        matches = list(apf.scan_ast(self.ast))
+        assert len(matches) == 5

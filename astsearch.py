@@ -151,7 +151,8 @@ class TemplatePruner(ast.NodeTransformer):
                     # Last positional argument - wildcard may extend to kwargs
                     positional_final_wildcard = True
 
-                node.args = node.args[:i] + astcheck.listmiddle() + node.args[i+1:]
+                node.args = self._visit_list(node.args[:i]) + astcheck.listmiddle() \
+                            + self._visit_list(node.args[i+1:])
 
                 # Don't try to handle multiple multiwildcards
                 break
@@ -173,11 +174,8 @@ class TemplatePruner(ast.NodeTransformer):
                     if k.arg == MULTIWILDCARD_NAME:
                         continue
                     if k.arg in sample_kwargs:
-                        print(k.value, sample_kwargs[k.arg])
-                        print('checking kw value', k.arg, astcheck.is_ast_like(sample_kwargs[k.arg], k.value))
                         astcheck.assert_ast_like(sample_kwargs[k.arg], k.value, path+[k.arg])
                     else:
-                        print('missing kw', k.arg)
                         raise astcheck.ASTMismatch(path, '(missing)', 'keyword arg %s' % k.arg)
 
             if template_keywords:
@@ -230,6 +228,9 @@ class TemplatePruner(ast.NodeTransformer):
                 else:
                     setattr(node, field, new_node)
         return node
+
+    def _visit_list(self, l):
+        return [self.visit(n) for n in l]
 
 def prepare_pattern(s):
     """Turn a string pattern into an AST pattern
