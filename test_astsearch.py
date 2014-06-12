@@ -5,7 +5,8 @@ import unittest
 
 from astcheck import assert_ast_like, listmiddle, name_or_attr
 from astsearch import (
-    prepare_pattern, ASTPatternFinder, must_exist_checker, must_not_exist_checker
+    prepare_pattern, ASTPatternFinder, must_exist_checker, must_not_exist_checker,
+    ArgsDefChecker,
 )
 
 class PreparePatternTests(unittest.TestCase):
@@ -79,6 +80,32 @@ class PreparePatternTests(unittest.TestCase):
         assert_ast_like(pat.kwargs,
                         ast.Dict(keys=[ast.Str(s='b')], values=[ast.Num(n=3)]))
 
+    def test_wildcard_funcdef(self):
+        pat = prepare_pattern("def f(??): ??")
+        assert_ast_like(pat, ast.FunctionDef(name='f'))
+        assert isinstance(pat.args.args, listmiddle)
+        assert pat.args.args.front == []
+        assert pat.args.args.back == []
+        assert not hasattr(pat.args.args, 'vararg')
+        assert not hasattr(pat.args.args, 'kwonlyargs')
+        assert not hasattr(pat.args.args, 'kwarg')
+
+    def test_wildcard_funcdef_earlyargs(self):
+        pat = prepare_pattern("def f(??, a): ??")
+        assert isinstance(pat.args.args, listmiddle)
+        assert_ast_like(pat.args.args.back[0], ast.arg(arg='a'))
+        assert pat.args.vararg is must_not_exist_checker
+        assert pat.args.kwonly_args_dflts == []
+
+    def test_wildcard_funcdef_kwonlyargs(self):
+        pat = prepare_pattern("def f(*, a, ??): ??")
+        assert isinstance(pat.args, ArgsDefChecker)
+        assert [a.arg for a,d in pat.args.kwonly_args_dflts] == ['a']
+        assert pat.args.koa_subset
+        assert pat.args.kwarg is None
+        assert pat.args.args is must_not_exist_checker
+        assert pat.args.vararg is must_not_exist_checker
+
 division_sample = """#!/usr/bin/python3
 'not / division'
 1/2
@@ -138,8 +165,7 @@ f(1, d=4, **k)
 """
 
 class FuncCallTests(unittest.TestCase, IterTestMixin):
-    def setUp(self):
-        self.ast = ast.parse(func_call_sample)
+    ast = ast.parse(func_call_sample)
 
     def test_wildcard_all(self):
         apf = ASTPatternFinder(prepare_pattern("f(??)"))
@@ -189,3 +215,59 @@ class FuncCallTests(unittest.TestCase, IterTestMixin):
         apf = ASTPatternFinder(prepare_pattern("f(?, ??)"))
         matches = list(apf.scan_ast(self.ast))
         assert len(matches) == 5
+
+func_def_samples = """
+def f(): pass
+
+def g(a): pass
+
+def h(a, b): pass
+
+def i(a, b, *, c): pass
+
+def j(*a, c, d): pass
+
+def k(a, b, **k): pass
+
+def l(*, d, c, **k): pass
+
+def m(a, b=2, c=4): pass
+
+def n(a, b, c=4): pass
+"""
+
+class FuncDefTests(unittest.TestCase, IterTestMixin):
+    ast = ast.parse(func_def_samples)
+
+    def get_matching_names(self, pat):
+        apf = ASTPatternFinder(prepare_pattern(pat))
+        matches = apf.scan_ast(self.ast)
+        return {f.name for f in matches}
+
+    def test_wildcard_all(self):
+        matches = self.get_matching_names("def ?(??): ??")
+        assert matches == {'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n'}
+
+    def test_trailing_wildcard(self):
+        matches = self.get_matching_names("def ?(a, ??): ??")
+        assert matches == {'g', 'h', 'i', 'k', 'm', 'n'}
+
+    def test_wildcard_kwonlyargs(self):
+        matches = self.get_matching_names("def ?(*, c, ??): ??")
+        assert matches == {'l'}
+
+    def test_wildcard_w_defaults(self):
+        matches = self.get_matching_names("def ?(a, b=2, ??=??, c=4): ??")
+        assert matches == {'m'}
+
+    def test_wildcard_w_defaults2(self):
+        matches = self.get_matching_names("def ?(a, b=2, ??=??): ??")
+        assert matches == {'m'}
+
+    def test_no_wildcard(self):
+        matches = self.get_matching_names("def ?(a, b, c=4): ??")
+        assert matches == {'m', 'n'}
+
+    def test_mix_wildcards(self):
+        matches = self.get_matching_names("def ?(?, ??): ??")
+        assert matches == {'g', 'h', 'i', 'k', 'm', 'n'}
