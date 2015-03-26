@@ -1,8 +1,11 @@
+"""Intelligently search Python source code"""
 import astcheck, ast
 from astcheck import assert_ast_like
 import os.path
 import sys
 import warnings
+
+__version__ = '0.1.1'
 
 class ASTPatternFinder(object):
     """Scans Python code for AST nodes matching pattern.
