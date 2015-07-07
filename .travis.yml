@@ -1,5 +1,6 @@
 language: python
 python:
+  - "3.4"
   - "3.3"
 install: pip install astcheck
 # command to run tests
