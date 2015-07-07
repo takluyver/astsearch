@@ -5,3 +5,4 @@ python:
 install: pip install astcheck
 # command to run tests
 script: py.test
+sudo: false
