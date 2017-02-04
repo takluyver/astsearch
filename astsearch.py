@@ -419,6 +419,11 @@ def prepare_pattern(s):
     pattern = ast.parse(s).body[0]
     if isinstance(pattern, ast.Expr):
         pattern = pattern.value
+    if isinstance(pattern, (ast.Attribute, ast.Subscript)):
+        # If the root of the pattern is like a.b or a[b], we want to match it
+        # regardless of context: `a.b=2` and `del a.b` should match as well as
+        # `c = a.b`
+        del pattern.ctx
     return TemplatePruner().visit(pattern)
 
 def main(argv=None):

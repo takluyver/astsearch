@@ -10,6 +10,11 @@ from astsearch import (
     ArgsDefChecker,
 )
 
+def get_matches(pattern, sample_code):
+    sample_ast = ast.parse(sample_code)
+    print(ast.dump(sample_ast))
+    return list(ASTPatternFinder(pattern).scan_ast(sample_ast))
+
 class PreparePatternTests(unittest.TestCase):
     def test_plain(self):
         pat = prepare_pattern('1/2')
@@ -112,6 +117,20 @@ class PreparePatternTests(unittest.TestCase):
         assert pat.args.kwarg is None
         assert pat.args.args is must_not_exist_checker
         assert pat.args.vararg is must_not_exist_checker
+
+    def test_attr_no_ctx(self):
+        pat = prepare_pattern('?.baz')
+        assert_ast_like(pat, ast.Attribute(attr='baz'))
+        assert not hasattr(pat, 'ctx')
+        matches = get_matches(pat, 'foo.baz = 1')
+        assert len(matches) == 1
+
+    def test_subscript_no_ctx(self):
+        pat = prepare_pattern('?[2]')
+        assert_ast_like(pat, ast.Subscript(slice=ast.Index(value=ast.Num(n=2))))
+        assert not hasattr(pat, 'ctx')
+        matches = get_matches(pat, 'd[2] = 1')
+        assert len(matches) == 1
 
 division_sample = """#!/usr/bin/python3
 'not / division'
