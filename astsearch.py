@@ -321,6 +321,58 @@ class TemplatePruner(ast.NodeTransformer):
             node.keywords = must_not_exist_checker
         return self.generic_visit(node)
 
+    def visit_Call_py35(self, node):
+        kwargs_are_subset = False
+        for i, n in enumerate(node.args):
+            if astcheck.is_ast_like(n, ast.Name(id=MULTIWILDCARD_NAME)):
+                if i + 1 == len(node.args):
+                    # Last positional argument - wildcard may extend to kwargs
+                    kwargs_are_subset = True
+
+                node.args = self._visit_list(
+                    node.args[:i]) + astcheck.listmiddle() \
+                            + self._visit_list(node.args[i + 1:])
+
+                # Don't try to handle multiple multiwildcards
+                break
+
+        if kwargs_are_subset or any(
+                        k.arg == MULTIWILDCARD_NAME for k in node.keywords):
+            template_keywords = [self.visit(k) for k in node.keywords
+                                 if k.arg != MULTIWILDCARD_NAME]
+
+            def kwargs_checker(sample_keywords, path):
+                sample_kwargs = {k.arg: k.value for k in sample_keywords}
+
+                for k in template_keywords:
+                    if k.arg == MULTIWILDCARD_NAME:
+                        continue
+                    if k.arg in sample_kwargs:
+                        astcheck.assert_ast_like(sample_kwargs[k.arg], k.value,
+                                                 path + [k.arg])
+                    else:
+                        raise astcheck.ASTMismatch(path, '(missing)',
+                                                   'keyword arg %s' % k.arg)
+
+            if template_keywords:
+                node.keywords = kwargs_checker
+            else:
+                # Shortcut if there are no keywords to check
+                del node.keywords
+
+        # In block contexts, we want to avoid checking empty lists (for optional
+        # nodes), but here, an empty list should mean that there are no
+        # arguments in that group. So we need to override the behaviour in
+        # generic_visit
+        if node.args == []:
+            node.args = must_not_exist_checker
+        if getattr(node, 'keywords', None) == []:
+            node.keywords = must_not_exist_checker
+        return self.generic_visit(node)
+
+    if sys.version_info > (3, 5):
+        visit_Call = visit_Call_py35
+
     def generic_visit(self, node):
         # Copied from ast.NodeTransformer; changes marked PATCH
         for field, old_value in ast.iter_fields(node):

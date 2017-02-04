@@ -1,5 +1,6 @@
 import ast
 from io import StringIO
+import sys
 import types
 import unittest
 
@@ -61,13 +62,15 @@ class PreparePatternTests(unittest.TestCase):
         assert isinstance(pat.args, listmiddle)
         assert pat.args.front == []
         assert_ast_like(pat.args.back[0], ast.Num(n=1))
-        assert pat.starargs is None
+        if sys.version_info < (3, 5):
+            assert pat.starargs is None
         assert pat.keywords == must_not_exist_checker
 
     def test_wildcard_call_keywords(self):
         pat = prepare_pattern("f(a=1, ??=??)")
         assert pat.args == must_not_exist_checker
-        assert pat.starargs is None
+        if sys.version_info < (3, 5):
+            assert pat.starargs is None
         assert isinstance(pat.keywords, types.FunctionType)
         assert not hasattr(pat, 'kwargs')
 
@@ -77,8 +80,12 @@ class PreparePatternTests(unittest.TestCase):
         assert_ast_like(pat.args.front[0], ast.Num(n=1))
         assert not hasattr(pat, 'starargs')
         assert isinstance(pat.keywords, types.FunctionType)
-        assert_ast_like(pat.kwargs,
-                        ast.Dict(keys=[ast.Str(s='b')], values=[ast.Num(n=3)]))
+        kwargs_dict = ast.Dict(keys=[ast.Str(s='b')], values=[ast.Num(n=3)])
+        if sys.version_info < (3, 5):
+            assert_ast_like(pat.kwargs, kwargs_dict)
+        else:
+            pat.keywords([ast.keyword(arg=None, value=kwargs_dict),
+                          ast.keyword(arg='a', value=ast.Num(n=2))], [])
 
     def test_wildcard_funcdef(self):
         pat = prepare_pattern("def f(??): ??")
