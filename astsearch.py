@@ -373,6 +373,31 @@ class TemplatePruner(ast.NodeTransformer):
     if sys.version_info > (3, 5):
         visit_Call = visit_Call_py35
 
+    def prune_import_names(self, node):
+        if len(node.names) == 1 and node.names[0].name == MULTIWILDCARD_NAME:
+            del node.names
+        else:
+            for alias in node.names:
+                self.visit_alias(alias)
+
+    def visit_ImportFrom(self, node):
+        self.prune_wildcard(node, 'module')
+        self.prune_import_names(node)
+        if node.level == 0:
+            del node.level
+        return node
+
+    def visit_Import(self, node):
+        self.prune_import_names(node)
+        return node
+
+    def visit_alias(self, node):
+        self.prune_wildcard(node, 'name')
+        if node.asname is None:
+            del node.asname
+        else:
+            self.prune_wildcard(node, 'asname')
+
     def generic_visit(self, node):
         # Copied from ast.NodeTransformer; changes marked PATCH
         for field, old_value in ast.iter_fields(node):

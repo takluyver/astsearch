@@ -132,6 +132,32 @@ class PreparePatternTests(unittest.TestCase):
         matches = get_matches(pat, 'd[2] = 1')
         assert len(matches) == 1
 
+    def test_import(self):
+        pat = prepare_pattern("import ?")
+        assert isinstance(pat, ast.Import)
+        assert len(pat.names) == 1
+        assert pat.names[0].name is must_exist_checker
+
+    def test_import_multi(self):
+        pat = prepare_pattern("import ??")
+        assert isinstance(pat, ast.Import)
+        assert not hasattr(pat, 'names')
+
+        pat = prepare_pattern("from x import ??")
+        assert isinstance(pat, ast.ImportFrom)
+        assert pat.module == 'x'
+        assert not hasattr(pat, 'names')
+
+    def test_import_from(self):
+        pat = prepare_pattern("from ? import ?")
+        assert isinstance(pat, ast.ImportFrom)
+        assert pat.module is must_exist_checker
+        assert len(pat.names) == 1
+        assert pat.names[0].name is must_exist_checker
+        assert not hasattr(pat.names[0], 'asname')
+        assert not hasattr(pat, 'level')
+
+
 division_sample = """#!/usr/bin/python3
 'not / division'
 1/2
