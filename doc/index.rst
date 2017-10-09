@@ -32,6 +32,11 @@ Contents:
 
    api
 
+.. seealso::
+
+   `astpath <https://github.com/hchasestevens/astpath>`_
+     Search through ASTs using XPath syntax
+
 Indices and tables
 ==================
 
