@@ -463,6 +463,9 @@ def main(argv=None):
                     help="AST pattern to search for; see docs for examples")
     ap.add_argument('path', nargs='?', default='.',
                     help="file or directory to search in")
+    ap.add_argument('-l', '--files-with-matches', action='store_true',
+                    help="output only the paths of matching files, not the "
+                         "lines that matched")
     ap.add_argument('--debug', action='store_true', help=argparse.SUPPRESS)
 
     args = ap.parse_args(argv)
@@ -479,23 +482,37 @@ def main(argv=None):
     if os.path.isdir(args.path):
         # Search directory
         current_filepath = None
-        for filepath, node in patternfinder.scan_directory(args.path):
-            if filepath != current_filepath:
-                with tokenize.open(filepath) as f:
-                    current_filelines = f.readlines()
-                if current_filepath is not None:
-                    print()  # Blank line between files
-                current_filepath = filepath
-                print(filepath)
-            _printline(node, current_filelines)
+        if args.files_with_matches:
+            for filepath, node in patternfinder.scan_directory(args.path):
+                if filepath != current_filepath:
+                    print(filepath)
+                    current_filepath = filepath
+        else:
+            for filepath, node in patternfinder.scan_directory(args.path):
+                if filepath != current_filepath:
+                    with tokenize.open(filepath) as f:
+                        current_filelines = f.readlines()
+                    if current_filepath is not None:
+                        print()  # Blank line between files
+                    current_filepath = filepath
+                    print(filepath)
+                _printline(node, current_filelines)
 
     elif os.path.exists(args.path):
         # Search file
-        for node in patternfinder.scan_file(args.path):
-            if not current_filelines:
-                with open(args.path) as f:
-                    current_filelines = f.readlines()
-            _printline(node, current_filelines)
+        if args.files_with_matches:
+            try:
+                node = next(patternfinder.scan_file(args.path))
+            except StopIteration:
+                pass
+            else:
+                print(args.path)
+        else:
+            for node in patternfinder.scan_file(args.path):
+                if not current_filelines:
+                    with tokenize.open(args.path) as f:
+                        current_filelines = f.readlines()
+                _printline(node, current_filelines)
 
     else:
         sys.exit("No such file or directory: {}".format(args.path))
