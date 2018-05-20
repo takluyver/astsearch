@@ -3,6 +3,7 @@ import astcheck, ast
 from astcheck import assert_ast_like
 import os.path
 import sys
+import tokenize
 import warnings
 
 __version__ = '0.1.3'
@@ -480,7 +481,7 @@ def main(argv=None):
         current_filepath = None
         for filepath, node in patternfinder.scan_directory(args.path):
             if filepath != current_filepath:
-                with open(filepath, 'r') as f:  # TODO: detect encoding
+                with tokenize.open(filepath) as f:
                     current_filelines = f.readlines()
                 if current_filepath is not None:
                     print()  # Blank line between files
