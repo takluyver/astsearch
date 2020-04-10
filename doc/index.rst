@@ -25,6 +25,10 @@ To use it::
    A Python file or a directory in which to search. Directories will be searched
    recursively for ``.py`` and ``.pyw`` files.
 
+.. option:: -l, --files-with-matches
+
+   Output only the paths of matching files, not the lines that matched.
+
 Contents:
 
 .. toctree::
