@@ -6,7 +6,7 @@ import sys
 import tokenize
 import warnings
 
-__version__ = '0.1.3'
+__version__ = '0.2.0'
 
 class ASTPatternFinder(object):
     """Scans Python code for AST nodes matching pattern.

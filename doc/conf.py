@@ -52,9 +52,10 @@ copyright = u'2014, Thomas Kluyver'
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
-#
+
+import astsearch
 # The short X.Y version.
-version = '0.1.3'
+version = astsearch.__version__
 # The full version, including alpha/beta/rc tags.
 release = version
 
