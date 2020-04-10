@@ -107,7 +107,7 @@ class ArgsDefChecker:
                     raise astcheck.ASTMismatch(path + ['defaults', argname],
                                                "(missing default)", dflt)
                 else:
-                    assert_ast_like(dflt, sample_dflt, path + ['defaults', argname])
+                    assert_ast_like(sample_dflt, dflt, path + ['defaults', argname])
 
         # *args
         if self.vararg:
@@ -182,6 +182,14 @@ class TemplatePruner(ast.NodeTransformer):
 
     def visit_Attribute(self, node):
         self.prune_wildcard(node, 'attr')
+        return self.generic_visit(node)
+
+    def visit_Constant(self, node):
+        # From Python 3.8, Constant nodes have a .kind attribute, which
+        # distuingishes u"" from "": https://bugs.python.org/issue36280
+        # astsearch isn't interested in that distinction.
+        if hasattr(node, 'kind'):
+            del node.kind
         return self.generic_visit(node)
 
     def visit_FunctionDef(self, node):
