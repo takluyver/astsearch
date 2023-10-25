@@ -471,6 +471,11 @@ def main(argv=None):
                     help="AST pattern to search for; see docs for examples")
     ap.add_argument('path', nargs='?', default='.',
                     help="file or directory to search in")
+    if sys.version_info >= (3, 8):
+        ap.add_argument(
+            '-m', '--max-lines', type=int, default=10,
+            help="maximum number of lines printed per match (0 disables "
+                 "multiline printing)")
     ap.add_argument('-l', '--files-with-matches', action='store_true',
                     help="output only the paths of matching files, not the "
                          "lines that matched")
@@ -483,8 +488,17 @@ def main(argv=None):
 
     patternfinder = ASTPatternFinder(ast_pattern)
 
-    def _printline(node, filelines):
-        print("{:>4}|{}".format(node.lineno, filelines[node.lineno-1].rstrip()))
+    if getattr(args, 'max_lines'):
+        def _printline(node, filelines):
+            for lineno in range(node.lineno, node.end_lineno + 1)[:args.max_lines]:
+                print("{:>4}|{}".format(lineno, filelines[lineno - 1].rstrip()))
+            elided = max(node.end_lineno + 1 - node.lineno - args.max_lines, 0)
+            if elided:
+                print("    └<{} more line{}>".format(elided, ['', 's'][elided > 1]))
+            print()
+    else:
+        def _printline(node, filelines):
+            print("{:>4}|{}".format(node.lineno, filelines[node.lineno-1].rstrip()))
 
     current_filelines = []
     if os.path.isdir(args.path):
