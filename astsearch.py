@@ -491,7 +491,7 @@ def main(argv=None):
     if getattr(args, 'max_lines'):
         def _printline(node, filelines):
             for lineno in range(node.lineno, node.end_lineno + 1)[:args.max_lines]:
-                print("{:>4}|{}".format(lineno, filelines[lineno - 1].rstrip()))
+                print("{:>4}│{}".format(lineno, filelines[lineno - 1].rstrip()))
             elided = max(node.end_lineno + 1 - node.lineno - args.max_lines, 0)
             if elided:
                 print("    └<{} more line{}>".format(elided, ['', 's'][elided > 1]))
