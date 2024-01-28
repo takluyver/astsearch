@@ -2,24 +2,27 @@
 requires = ["flit_core >=2,<4"]
 build-backend = "flit_core.buildapi"
 
-[tool.flit.metadata]
-module = "astsearch"
-author = "Thomas Kluyver"
-author-email = "thomas@kluyver.me.uk"
-home-page = "https://github.com/takluyver/astsearch"
-description-file = "README.rst"
+[project]
+name = "astsearch"
+authors = [
+    {name = "Thomas Kluyver", email = "thomas@kluyver.me.uk"},
+]
+readme = "README.rst"
 requires-python = ">=3"
-requires = ["astcheck (>=0.2.3)"]
+license = {file = "LICENSE"}
+dependencies = ["astcheck (>=0.2.3)"]
 classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Software Development :: Code Generators",
     "Topic :: Software Development :: Testing"
 ]
 
-[tool.flit.scripts]
+[project.scripts]
 astsearch = "astsearch:main"
 
+[project.urls]
+Home = "https://github.com/takluyver/astsearch"
+[tool.flit.metadata]
