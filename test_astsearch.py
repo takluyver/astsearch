@@ -18,9 +18,9 @@ def get_matches(pattern, sample_code):
 class PreparePatternTests(unittest.TestCase):
     def test_plain(self):
         pat = prepare_pattern('1/2')
-        assert_ast_like(pat, ast.BinOp(left=ast.Num(n=1),
+        assert_ast_like(pat, ast.BinOp(left=ast.Constant(1),
                                        op=ast.Div(),
-                                       right=ast.Num(n=2))
+                                       right=ast.Constant(2))
                         )
 
     def test_simple_wildcard(self):
@@ -48,7 +48,7 @@ class PreparePatternTests(unittest.TestCase):
 
     def test_name_or_attr(self):
         pat = prepare_pattern('a = 1')
-        assert_ast_like(pat, ast.Assign(value=ast.Num(1)))
+        assert_ast_like(pat, ast.Assign(value=ast.Constant(1)))
         assert (isinstance(pat.targets[0], types.FunctionType) \
                 or isinstance(pat.targets[0], name_or_attr))
 
@@ -66,7 +66,7 @@ class PreparePatternTests(unittest.TestCase):
         pat = prepare_pattern("f(??, 1)")
         assert isinstance(pat.args, listmiddle)
         assert pat.args.front == []
-        assert_ast_like(pat.args.back[0], ast.Num(n=1))
+        assert_ast_like(pat.args.back[0], ast.Constant(1))
         if sys.version_info < (3, 5):
             assert pat.starargs is None
         assert pat.keywords == must_not_exist_checker
@@ -82,15 +82,15 @@ class PreparePatternTests(unittest.TestCase):
     def test_wildcard_call_mixed_args(self):
         pat = prepare_pattern("f(1, ??, a=2, **{'b':3})")
         assert isinstance(pat.args, listmiddle)
-        assert_ast_like(pat.args.front[0], ast.Num(n=1))
+        assert_ast_like(pat.args.front[0], ast.Constant(1))
         assert not hasattr(pat, 'starargs')
         assert isinstance(pat.keywords, types.FunctionType)
-        kwargs_dict = ast.Dict(keys=[ast.Str(s='b')], values=[ast.Num(n=3)])
+        kwargs_dict = ast.Dict(keys=[ast.Constant('b')], values=[ast.Constant(3)])
         if sys.version_info < (3, 5):
             assert_ast_like(pat.kwargs, kwargs_dict)
         else:
             pat.keywords([ast.keyword(arg=None, value=kwargs_dict),
-                          ast.keyword(arg='a', value=ast.Num(n=2))], [])
+                          ast.keyword(arg='a', value=ast.Constant(2))], [])
 
     def test_wildcard_funcdef(self):
         pat = prepare_pattern("def f(??): ??")
@@ -127,7 +127,7 @@ class PreparePatternTests(unittest.TestCase):
 
     def test_subscript_no_ctx(self):
         pat = prepare_pattern('?[2]')
-        assert_ast_like(pat, ast.Subscript(slice=ast.Index(value=ast.Num(n=2))))
+        assert_ast_like(pat, ast.Subscript(slice=ast.Index(value=ast.Constant(2))))
         assert not hasattr(pat, 'ctx')
         matches = get_matches(pat, 'd[2] = 1')
         assert len(matches) == 1
@@ -196,15 +196,15 @@ class IterTestMixin:
 
 class PatternFinderTests(unittest.TestCase, IterTestMixin):
     def test_plain(self):
-        pat = ast.BinOp(left=ast.Num(1), right=ast.Num(2), op=ast.Div())
+        pat = ast.BinOp(left=ast.Constant(1), right=ast.Constant(2), op=ast.Div())
         it = ASTPatternFinder(pat).scan_file(StringIO(division_sample))
-        assert next(it).left.n == 1
+        assert next(it).left.value == 1
         self.assert_no_more(it)
 
     def test_all_divisions(self):
         pat = ast.BinOp(op=ast.Div())
         it = ASTPatternFinder(pat).scan_file(StringIO(division_sample))
-        assert_ast_like(next(it), ast.BinOp(left=ast.Num(n=1)))
+        assert_ast_like(next(it), ast.BinOp(left=ast.Constant(1)))
         assert_ast_like(next(it), ast.BinOp(right=ast.Name(id='c')))
         assert_ast_like(next(it), ast.BinOp(left=ast.Name(id='x')))
         self.assert_no_more(it)
@@ -237,10 +237,10 @@ class FuncCallTests(unittest.TestCase, IterTestMixin):
     def test_pos_final_wildcard(self):
         apf = ASTPatternFinder(prepare_pattern("f(1, ??)"))
         it = apf.scan_ast(self.ast)
-        assert_ast_like(next(it), ast.Call(args=[ast.Num(n=1)]))
-        assert_ast_like(next(it), ast.Call(args=[ast.Num(n=1), ast.Num(n=2)]))
+        assert_ast_like(next(it), ast.Call(args=[ast.Constant(1)]))
+        assert_ast_like(next(it), ast.Call(args=[ast.Constant(1), ast.Constant(2)]))
         assert_ast_like(next(it), ast.Call(starargs=ast.Name(id='c')))
-        assert_ast_like(next(it), ast.Call(args=[ast.Num(n=1)],
+        assert_ast_like(next(it), ast.Call(args=[ast.Constant(1)],
                                          keywords=[ast.keyword(arg='d'),
                                                    ast.keyword(arg='e'),
                                                   ])
@@ -251,7 +251,7 @@ class FuncCallTests(unittest.TestCase, IterTestMixin):
     def test_pos_leading_wildcard(self):
         apf = ASTPatternFinder(prepare_pattern("f(??, 2)"))
         it = apf.scan_ast(self.ast)
-        assert_ast_like(next(it), ast.Call(args=[ast.Num(n=1), ast.Num(n=2)]))
+        assert_ast_like(next(it), ast.Call(args=[ast.Constant(1), ast.Constant(2)]))
         self.assert_no_more(it)
 
     def test_keywords_wildcard(self):
