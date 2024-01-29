@@ -150,7 +150,7 @@ class PreparePatternTests(unittest.TestCase):
 
     def test_import_from(self):
         pat = prepare_pattern("from ? import ?")
-        print(ast.dump(pat, indent=2))
+        print(ast.dump(pat))
         assert isinstance(pat, ast.ImportFrom)
         assert pat.module is must_exist_checker
         assert len(pat.names) == 1
@@ -163,7 +163,7 @@ class PreparePatternTests(unittest.TestCase):
 
     def test_bare_except(self):
         pat = prepare_pattern("try: ??\nexcept: ??")
-        print(ast.dump(pat, indent=2))
+        print(ast.dump(pat))
         assert len(get_matches(pat, "try: pass\nexcept: pass")) == 1
         # 'except:' should only match a bare assert with no exception type
         assert len(get_matches(pat, "try: pass\nexcept Exception: pass")) == 0
