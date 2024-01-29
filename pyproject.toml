@@ -19,10 +19,10 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Software Development :: Testing"
 ]
+dynamic = ["version", "description"]
 
 [project.scripts]
 astsearch = "astsearch:main"
 
 [project.urls]
 Home = "https://github.com/takluyver/astsearch"
-[tool.flit.metadata]
