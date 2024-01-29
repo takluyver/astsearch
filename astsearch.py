@@ -188,8 +188,7 @@ class TemplatePruner(ast.NodeTransformer):
         # From Python 3.8, Constant nodes have a .kind attribute, which
         # distuingishes u"" from "": https://bugs.python.org/issue36280
         # astsearch isn't interested in that distinction.
-        if hasattr(node, 'kind'):
-            node.kind = None
+        node.kind = None
         return self.generic_visit(node)
 
     def visit_FunctionDef(self, node):
