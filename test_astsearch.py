@@ -150,13 +150,23 @@ class PreparePatternTests(unittest.TestCase):
 
     def test_import_from(self):
         pat = prepare_pattern("from ? import ?")
+        print(ast.dump(pat, indent=2))
         assert isinstance(pat, ast.ImportFrom)
         assert pat.module is must_exist_checker
         assert len(pat.names) == 1
         assert pat.names[0].name is must_exist_checker
-        assert not hasattr(pat.names[0], 'asname')
-        assert not hasattr(pat, 'level')
+        assert len(get_matches(pat, "from foo import bar as foobar")) == 1
 
+    def test_string_u_prefix(self):
+        pat = prepare_pattern('"foo"')
+        assert len(get_matches(pat, "u'foo'")) == 1
+
+    def test_bare_except(self):
+        pat = prepare_pattern("try: ??\nexcept: ??")
+        print(ast.dump(pat, indent=2))
+        assert len(get_matches(pat, "try: pass\nexcept: pass")) == 1
+        # 'except:' should only match a bare assert with no exception type
+        assert len(get_matches(pat, "try: pass\nexcept Exception: pass")) == 0
 
 division_sample = """#!/usr/bin/python3
 'not / division'

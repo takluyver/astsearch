@@ -188,8 +188,7 @@ class TemplatePruner(ast.NodeTransformer):
         # From Python 3.8, Constant nodes have a .kind attribute, which
         # distuingishes u"" from "": https://bugs.python.org/issue36280
         # astsearch isn't interested in that distinction.
-        if hasattr(node, 'kind'):
-            del node.kind
+        node.kind = None
         return self.generic_visit(node)
 
     def visit_FunctionDef(self, node):
@@ -267,6 +266,10 @@ class TemplatePruner(ast.NodeTransformer):
         return self.generic_visit(node)
 
     def visit_ExceptHandler(self, node):
+        if node.type is None:
+            node.type = must_not_exist_checker
+        else:
+            self.prune_wildcard(node, 'type')
         self.prune_wildcard(node, 'name')
         self.prune_wildcard_body(node, 'body')
         return self.generic_visit(node)
@@ -393,7 +396,7 @@ class TemplatePruner(ast.NodeTransformer):
         self.prune_wildcard(node, 'module')
         self.prune_import_names(node)
         if node.level == 0:
-            del node.level
+            node.level = None
         return node
 
     def visit_Import(self, node):
@@ -402,10 +405,7 @@ class TemplatePruner(ast.NodeTransformer):
 
     def visit_alias(self, node):
         self.prune_wildcard(node, 'name')
-        if node.asname is None:
-            del node.asname
-        else:
-            self.prune_wildcard(node, 'asname')
+        self.prune_wildcard(node, 'asname')
 
     def generic_visit(self, node):
         # Copied from ast.NodeTransformer; changes marked PATCH
@@ -432,10 +432,7 @@ class TemplatePruner(ast.NodeTransformer):
                 old_value[:] = new_values
             elif isinstance(old_value, ast.AST):
                 new_node = self.visit(old_value)
-                if new_node is None:
-                    delattr(node, field)
-                else:
-                    setattr(node, field, new_node)
+                setattr(node, field, new_node)
         return node
 
     def _visit_list(self, l):

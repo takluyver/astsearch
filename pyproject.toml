@@ -8,9 +8,9 @@ authors = [
     {name = "Thomas Kluyver", email = "thomas@kluyver.me.uk"},
 ]
 readme = "README.rst"
-requires-python = ">=3"
+requires-python = ">=3.9"
 license = {file = "LICENSE"}
-dependencies = ["astcheck (>=0.2.3)"]
+dependencies = ["astcheck (>=0.4)"]
 classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
