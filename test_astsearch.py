@@ -4,169 +4,174 @@ import sys
 import types
 import unittest
 
+import pytest
+
 from astcheck import assert_ast_like, listmiddle, name_or_attr
 from astsearch import (
     prepare_pattern, ASTPatternFinder, must_exist_checker, must_not_exist_checker,
     ArgsDefChecker,
 )
 
+def assert_iterator_finished(it):
+    with pytest.raises(StopIteration):
+        next(it)
+
 def get_matches(pattern, sample_code):
     sample_ast = ast.parse(sample_code)
     print(ast.dump(sample_ast))
     return list(ASTPatternFinder(pattern).scan_ast(sample_ast))
 
-class PreparePatternTests(unittest.TestCase):
-    def test_plain(self):
-        pat = prepare_pattern('1/2')
-        assert_ast_like(pat, ast.BinOp(left=ast.Constant(1),
-                                       op=ast.Div(),
-                                       right=ast.Constant(2))
-                        )
 
-    def test_simple_wildcard(self):
-        pat = prepare_pattern('?/?')
-        assert_ast_like(pat, ast.BinOp(op=ast.Div()))
-        assert pat.left is must_exist_checker
-        assert pat.right is must_exist_checker
+# Tests of just preparing the pattern --------------------------------
 
-    def test_wildcard_body(self):
-        pat = prepare_pattern('if True: ??\nelse: ??')
-        assert isinstance(pat, ast.If)
-        assert pat.body is must_exist_checker
-        assert pat.orelse is must_exist_checker
+def test_prepare_plain():
+    pat = prepare_pattern('1/2')
+    assert_ast_like(pat, ast.BinOp(
+        left=ast.Constant(1), op=ast.Div(), right=ast.Constant(2)
+    ))
 
-        pat2 = prepare_pattern('if True: ??')
-        assert isinstance(pat2, ast.If)
-        assert pat.body is must_exist_checker
-        assert not hasattr(pat2, 'orelse')
+def test_simple_wildcard():
+    pat = prepare_pattern('?/?')
+    assert_ast_like(pat, ast.BinOp(op=ast.Div()))
+    assert pat.left is must_exist_checker
+    assert pat.right is must_exist_checker
 
-    def test_wildcard_body_part(self):
-        pat = prepare_pattern("def foo():\n  ??\n  return a")
-        assert isinstance(pat, ast.FunctionDef)
-        assert isinstance(pat.body, listmiddle)
-        assert_ast_like(pat.body.back[0], ast.Return(ast.Name(id='a')))
+def test_wildcard_body():
+    pat = prepare_pattern('if True: ??\nelse: ??')
+    assert isinstance(pat, ast.If)
+    assert pat.body is must_exist_checker
+    assert pat.orelse is must_exist_checker
 
-    def test_name_or_attr(self):
-        pat = prepare_pattern('a = 1')
-        assert_ast_like(pat, ast.Assign(value=ast.Constant(1)))
-        assert (isinstance(pat.targets[0], types.FunctionType) \
-                or isinstance(pat.targets[0], name_or_attr))
+    pat2 = prepare_pattern('if True: ??')
+    assert isinstance(pat2, ast.If)
+    assert pat.body is must_exist_checker
+    assert not hasattr(pat2, 'orelse')
 
-    def test_wildcard_call_args(self):
-        pat = prepare_pattern("f(??)")
-        assert isinstance(pat, ast.Call)
-        assert isinstance(pat.args, listmiddle)
-        assert pat.args.front == []
-        assert pat.args.back == []
-        assert not hasattr(pat, 'keywords')
-        assert not hasattr(pat, 'starargs')
-        assert not hasattr(pat, 'kwargs')
+def test_wildcard_body_part():
+    pat = prepare_pattern("def foo():\n  ??\n  return a")
+    assert isinstance(pat, ast.FunctionDef)
+    assert isinstance(pat.body, listmiddle)
+    assert_ast_like(pat.body.back[0], ast.Return(ast.Name(id='a')))
 
-    def test_wildcard_some_call_args(self):
-        pat = prepare_pattern("f(??, 1)")
-        assert isinstance(pat.args, listmiddle)
-        assert pat.args.front == []
-        assert_ast_like(pat.args.back[0], ast.Constant(1))
-        if sys.version_info < (3, 5):
-            assert pat.starargs is None
-        assert pat.keywords == must_not_exist_checker
+def test_name_or_attr():
+    pat = prepare_pattern('a = 1')
+    assert_ast_like(pat, ast.Assign(value=ast.Constant(1)))
+    assert isinstance(pat.targets[0], name_or_attr)
 
-    def test_wildcard_call_keywords(self):
-        pat = prepare_pattern("f(a=1, ??=??)")
-        assert pat.args == must_not_exist_checker
-        if sys.version_info < (3, 5):
-            assert pat.starargs is None
-        assert isinstance(pat.keywords, types.FunctionType)
-        assert not hasattr(pat, 'kwargs')
+def test_wildcard_call_args():
+    pat = prepare_pattern("f(??)")
+    assert isinstance(pat, ast.Call)
+    assert isinstance(pat.args, listmiddle)
+    assert pat.args.front == []
+    assert pat.args.back == []
+    assert not hasattr(pat, 'keywords')
+    assert not hasattr(pat, 'starargs')
+    assert not hasattr(pat, 'kwargs')
 
-    def test_wildcard_call_mixed_args(self):
-        pat = prepare_pattern("f(1, ??, a=2, **{'b':3})")
-        assert isinstance(pat.args, listmiddle)
-        assert_ast_like(pat.args.front[0], ast.Constant(1))
-        assert not hasattr(pat, 'starargs')
-        assert isinstance(pat.keywords, types.FunctionType)
-        kwargs_dict = ast.Dict(keys=[ast.Constant('b')], values=[ast.Constant(3)])
-        if sys.version_info < (3, 5):
-            assert_ast_like(pat.kwargs, kwargs_dict)
-        else:
-            pat.keywords([ast.keyword(arg=None, value=kwargs_dict),
-                          ast.keyword(arg='a', value=ast.Constant(2))], [])
+def test_wildcard_some_call_args():
+    pat = prepare_pattern("f(??, 1)")
+    assert isinstance(pat.args, listmiddle)
+    assert pat.args.front == []
+    assert_ast_like(pat.args.back[0], ast.Constant(1))
+    assert pat.keywords == must_not_exist_checker
 
-    def test_wildcard_funcdef(self):
-        pat = prepare_pattern("def f(??): ??")
-        assert_ast_like(pat, ast.FunctionDef(name='f'))
-        assert isinstance(pat.args.args, listmiddle)
-        assert pat.args.args.front == []
-        assert pat.args.args.back == []
-        assert not hasattr(pat.args.args, 'vararg')
-        assert not hasattr(pat.args.args, 'kwonlyargs')
-        assert not hasattr(pat.args.args, 'kwarg')
+def test_wildcard_call_keywords():
+    pat = prepare_pattern("f(a=1, ??=??)")
+    assert pat.args == must_not_exist_checker
+    assert isinstance(pat.keywords, types.FunctionType)
+    assert not hasattr(pat, 'kwargs')
 
-    def test_wildcard_funcdef_earlyargs(self):
-        pat = prepare_pattern("def f(??, a): ??")
-        assert isinstance(pat.args.args, listmiddle)
-        assert_ast_like(pat.args.args.back[0], ast.arg(arg='a'))
-        assert pat.args.vararg is must_not_exist_checker
-        assert pat.args.kwonly_args_dflts == []
+def test_wildcard_call_mixed_args():
+    pat = prepare_pattern("f(1, ??, a=2, **{'b':3})")
+    assert isinstance(pat.args, listmiddle)
+    assert_ast_like(pat.args.front[0], ast.Constant(1))
+    assert not hasattr(pat, 'starargs')
+    assert isinstance(pat.keywords, types.FunctionType)
+    kwargs_dict = ast.Dict(keys=[ast.Constant('b')], values=[ast.Constant(3)])
+    if sys.version_info < (3, 5):
+        assert_ast_like(pat.kwargs, kwargs_dict)
+    else:
+        pat.keywords([ast.keyword(arg=None, value=kwargs_dict),
+                      ast.keyword(arg='a', value=ast.Constant(2))], [])
 
-    def test_wildcard_funcdef_kwonlyargs(self):
-        pat = prepare_pattern("def f(*, a, ??): ??")
-        assert isinstance(pat.args, ArgsDefChecker)
-        assert [a.arg for a,d in pat.args.kwonly_args_dflts] == ['a']
-        assert pat.args.koa_subset
-        assert pat.args.kwarg is None
-        assert pat.args.args is must_not_exist_checker
-        assert pat.args.vararg is must_not_exist_checker
+def test_wildcard_funcdef():
+    pat = prepare_pattern("def f(??): ??")
+    assert_ast_like(pat, ast.FunctionDef(name='f'))
+    assert isinstance(pat.args.args, listmiddle)
+    assert pat.args.args.front == []
+    assert pat.args.args.back == []
+    assert not hasattr(pat.args.args, 'vararg')
+    assert not hasattr(pat.args.args, 'kwonlyargs')
+    assert not hasattr(pat.args.args, 'kwarg')
 
-    def test_attr_no_ctx(self):
-        pat = prepare_pattern('?.baz')
-        assert_ast_like(pat, ast.Attribute(attr='baz'))
-        assert not hasattr(pat, 'ctx')
-        matches = get_matches(pat, 'foo.baz = 1')
-        assert len(matches) == 1
+def test_wildcard_funcdef_earlyargs():
+    pat = prepare_pattern("def f(??, a): ??")
+    assert isinstance(pat.args.args, listmiddle)
+    assert_ast_like(pat.args.args.back[0], ast.arg(arg='a'))
+    assert pat.args.vararg is must_not_exist_checker
+    assert pat.args.kwonly_args_dflts == []
 
-    def test_subscript_no_ctx(self):
-        pat = prepare_pattern('?[2]')
-        assert_ast_like(pat, ast.Subscript(slice=ast.Index(value=ast.Constant(2))))
-        assert not hasattr(pat, 'ctx')
-        matches = get_matches(pat, 'd[2] = 1')
-        assert len(matches) == 1
+def test_wildcard_funcdef_kwonlyargs():
+    pat = prepare_pattern("def f(*, a, ??): ??")
+    assert isinstance(pat.args, ArgsDefChecker)
+    assert [a.arg for a,d in pat.args.kwonly_args_dflts] == ['a']
+    assert pat.args.koa_subset
+    assert pat.args.kwarg is None
+    assert pat.args.args is must_not_exist_checker
+    assert pat.args.vararg is must_not_exist_checker
 
-    def test_import(self):
-        pat = prepare_pattern("import ?")
-        assert isinstance(pat, ast.Import)
-        assert len(pat.names) == 1
-        assert pat.names[0].name is must_exist_checker
+def test_attr_no_ctx():
+    pat = prepare_pattern('?.baz')
+    assert_ast_like(pat, ast.Attribute(attr='baz'))
+    assert not hasattr(pat, 'ctx')
+    matches = get_matches(pat, 'foo.baz = 1')
+    assert len(matches) == 1
 
-    def test_import_multi(self):
-        pat = prepare_pattern("import ??")
-        assert isinstance(pat, ast.Import)
-        assert not hasattr(pat, 'names')
+def test_subscript_no_ctx():
+    pat = prepare_pattern('?[2]')
+    assert_ast_like(pat, ast.Subscript(slice=ast.Index(value=ast.Constant(2))))
+    assert not hasattr(pat, 'ctx')
+    matches = get_matches(pat, 'd[2] = 1')
+    assert len(matches) == 1
 
-        pat = prepare_pattern("from x import ??")
-        assert isinstance(pat, ast.ImportFrom)
-        assert pat.module == 'x'
-        assert not hasattr(pat, 'names')
+def test_import():
+    pat = prepare_pattern("import ?")
+    assert isinstance(pat, ast.Import)
+    assert len(pat.names) == 1
+    assert pat.names[0].name is must_exist_checker
 
-    def test_import_from(self):
-        pat = prepare_pattern("from ? import ?")
-        print(ast.dump(pat, indent=2))
-        assert isinstance(pat, ast.ImportFrom)
-        assert pat.module is must_exist_checker
-        assert len(pat.names) == 1
-        assert pat.names[0].name is must_exist_checker
-        assert len(get_matches(pat, "from foo import bar as foobar")) == 1
+def test_import_multi():
+    pat = prepare_pattern("import ??")
+    assert isinstance(pat, ast.Import)
+    assert not hasattr(pat, 'names')
 
-    def test_string_u_prefix(self):
-        pat = prepare_pattern('"foo"')
-        assert len(get_matches(pat, "u'foo'")) == 1
+    pat = prepare_pattern("from x import ??")
+    assert isinstance(pat, ast.ImportFrom)
+    assert pat.module == 'x'
+    assert not hasattr(pat, 'names')
 
-    def test_bare_except(self):
-        pat = prepare_pattern("try: ??\nexcept: ??")
-        print(ast.dump(pat, indent=2))
-        assert len(get_matches(pat, "try: pass\nexcept: pass")) == 1
-        # 'except:' should only match a bare assert with no exception type
-        assert len(get_matches(pat, "try: pass\nexcept Exception: pass")) == 0
+def test_import_from():
+    pat = prepare_pattern("from ? import ?")
+    print(ast.dump(pat, indent=2))
+    assert isinstance(pat, ast.ImportFrom)
+    assert pat.module is must_exist_checker
+    assert len(pat.names) == 1
+    assert pat.names[0].name is must_exist_checker
+    assert len(get_matches(pat, "from foo import bar as foobar")) == 1
+
+def test_string_u_prefix():
+    pat = prepare_pattern('"foo"')
+    assert len(get_matches(pat, "u'foo'")) == 1
+
+def test_bare_except():
+    pat = prepare_pattern("try: ??\nexcept: ??")
+    print(ast.dump(pat, indent=2))
+    assert len(get_matches(pat, "try: pass\nexcept: pass")) == 1
+    # 'except:' should only match a bare assert with no exception type
+    assert len(get_matches(pat, "try: pass\nexcept Exception: pass")) == 0
+
+
+# Tests of general matching -----------------------------------------------
 
 division_sample = """#!/usr/bin/python3
 'not / division'
@@ -189,31 +194,28 @@ if b:
     pass
 """
 
-class IterTestMixin:
-    def assert_no_more(self, it):
-        with self.assertRaises(StopIteration):
-            next(it)
+def test_match_plain():
+    pat = ast.BinOp(left=ast.Constant(1), right=ast.Constant(2), op=ast.Div())
+    it = ASTPatternFinder(pat).scan_file(StringIO(division_sample))
+    assert next(it).left.value == 1
+    assert_iterator_finished(it)
 
-class PatternFinderTests(unittest.TestCase, IterTestMixin):
-    def test_plain(self):
-        pat = ast.BinOp(left=ast.Constant(1), right=ast.Constant(2), op=ast.Div())
-        it = ASTPatternFinder(pat).scan_file(StringIO(division_sample))
-        assert next(it).left.value == 1
-        self.assert_no_more(it)
+def test_all_divisions():
+    pat = ast.BinOp(op=ast.Div())
+    it = ASTPatternFinder(pat).scan_file(StringIO(division_sample))
+    assert_ast_like(next(it), ast.BinOp(left=ast.Constant(1)))
+    assert_ast_like(next(it), ast.BinOp(right=ast.Name(id='c')))
+    assert_ast_like(next(it), ast.BinOp(left=ast.Name(id='x')))
+    assert_iterator_finished(it)
 
-    def test_all_divisions(self):
-        pat = ast.BinOp(op=ast.Div())
-        it = ASTPatternFinder(pat).scan_file(StringIO(division_sample))
-        assert_ast_like(next(it), ast.BinOp(left=ast.Constant(1)))
-        assert_ast_like(next(it), ast.BinOp(right=ast.Name(id='c')))
-        assert_ast_like(next(it), ast.BinOp(left=ast.Name(id='x')))
-        self.assert_no_more(it)
+def test_block_must_exist():
+    pat = ast.If(orelse=must_exist_checker)
+    it = ASTPatternFinder(pat).scan_file(StringIO(if_sample))
+    assert_ast_like(next(it), ast.If(test=ast.Name(id='a')))
+    assert_iterator_finished(it)
 
-    def test_block_must_exist(self):
-        pat = ast.If(orelse=must_exist_checker)
-        it = ASTPatternFinder(pat).scan_file(StringIO(if_sample))
-        assert_ast_like(next(it), ast.If(test=ast.Name(id='a')))
-        self.assert_no_more(it)
+
+# Test matching of function calls -----------------------------------
 
 func_call_sample = """
 f()
@@ -226,7 +228,7 @@ f(1, d=3, e=4)
 f(1, d=4, **k)
 """
 
-class FuncCallTests(unittest.TestCase, IterTestMixin):
+class FuncCallTests(unittest.TestCase):
     ast = ast.parse(func_call_sample)
 
     def test_wildcard_all(self):
@@ -246,13 +248,13 @@ class FuncCallTests(unittest.TestCase, IterTestMixin):
                                                   ])
                        )
         assert_ast_like(next(it), ast.Call(kwargs=ast.Name(id='k')))
-        self.assert_no_more(it)
+        assert_iterator_finished(it)
 
     def test_pos_leading_wildcard(self):
         apf = ASTPatternFinder(prepare_pattern("f(??, 2)"))
         it = apf.scan_ast(self.ast)
         assert_ast_like(next(it), ast.Call(args=[ast.Constant(1), ast.Constant(2)]))
-        self.assert_no_more(it)
+        assert_iterator_finished(it)
 
     def test_keywords_wildcard(self):
         apf = ASTPatternFinder(prepare_pattern("f(e=4, ??=??)"))
@@ -260,7 +262,7 @@ class FuncCallTests(unittest.TestCase, IterTestMixin):
         assert_ast_like(next(it), ast.Call(keywords=[ast.keyword(arg='d'),
                                                      ast.keyword(arg='e'),])
                         )
-        self.assert_no_more(it)
+        assert_iterator_finished(it)
 
     def test_keywords_wildcard2(self):
         apf = ASTPatternFinder(prepare_pattern("f(d=?, ??=??)"))
@@ -277,6 +279,9 @@ class FuncCallTests(unittest.TestCase, IterTestMixin):
         apf = ASTPatternFinder(prepare_pattern("f(?, ??)"))
         matches = list(apf.scan_ast(self.ast))
         assert len(matches) == 5
+
+
+# Test matching of function definitions ---------------------------------
 
 func_def_samples = """
 def f(): pass
@@ -298,7 +303,7 @@ def m(a, b=2, c=4): pass
 def n(a, b, c=4): pass
 """
 
-class FuncDefTests(unittest.TestCase, IterTestMixin):
+class FuncDefTests(unittest.TestCase):
     ast = ast.parse(func_def_samples)
 
     def get_matching_names(self, pat):
