@@ -210,68 +210,44 @@ def test_block_must_exist():
 # Test matching of function calls -----------------------------------
 
 func_call_sample = """
-f()
-f(1)
-f(1, 2)
-f(1, 2, *c)
-f(d=3)
-f(d=3, e=4)
-f(1, d=3, e=4)
-f(1, d=4, **k)
+f1()
+f2(1)
+f3(1, 2)
+f4(1, 2, *c)
+f5(d=3)
+f6(d=3, e=4)
+f7(1, d=3, e=4)
+f8(1, d=4, **k)
 """
 
 class FuncCallTests(unittest.TestCase):
     ast = ast.parse(func_call_sample)
 
+    def get_matching_names(self, pat):
+        apf = ASTPatternFinder(prepare_pattern(pat))
+        matches = apf.scan_ast(self.ast)
+        return [f.func.id for f in matches]
+
     def test_wildcard_all(self):
-        apf = ASTPatternFinder(prepare_pattern("f(??)"))
-        matches = list(apf.scan_ast(self.ast))
-        assert len(matches) == 8
+        assert self.get_matching_names("?(??)") == [f"f{i}" for i in range(1, 9)]
 
     def test_pos_final_wildcard(self):
-        apf = ASTPatternFinder(prepare_pattern("f(1, ??)"))
-        it = apf.scan_ast(self.ast)
-        assert_ast_like(next(it), ast.Call(args=[ast.Constant(1)]))
-        assert_ast_like(next(it), ast.Call(args=[ast.Constant(1), ast.Constant(2)]))
-        assert_ast_like(next(it), ast.Call(starargs=ast.Name(id='c')))
-        assert_ast_like(next(it), ast.Call(args=[ast.Constant(1)],
-                                         keywords=[ast.keyword(arg='d'),
-                                                   ast.keyword(arg='e'),
-                                                  ])
-                       )
-        assert_ast_like(next(it), ast.Call(kwargs=ast.Name(id='k')))
-        assert_iterator_finished(it)
+        assert self.get_matching_names("?(1, ??)") == ["f2", "f3", "f4", "f7", "f8"]
 
     def test_pos_leading_wildcard(self):
-        apf = ASTPatternFinder(prepare_pattern("f(??, 2)"))
-        it = apf.scan_ast(self.ast)
-        assert_ast_like(next(it), ast.Call(args=[ast.Constant(1), ast.Constant(2)]))
-        assert_iterator_finished(it)
+        assert self.get_matching_names("?(??, 2)") == ["f3"]
 
     def test_keywords_wildcard(self):
-        apf = ASTPatternFinder(prepare_pattern("f(e=4, ??=??)"))
-        it = apf.scan_ast(self.ast)
-        assert_ast_like(next(it), ast.Call(keywords=[ast.keyword(arg='d'),
-                                                     ast.keyword(arg='e'),])
-                        )
-        assert_iterator_finished(it)
+        assert self.get_matching_names("?(e=4, ??=??)") == ["f6"]
 
     def test_keywords_wildcard2(self):
-        apf = ASTPatternFinder(prepare_pattern("f(d=?, ??=??)"))
-        matches = list(apf.scan_ast(self.ast))
-        assert len(matches) == 2
+        assert self.get_matching_names("?(d=?, ??=??)") == ["f5", "f6"]
 
     def test_mixed_wildcard(self):
-        apf = ASTPatternFinder(prepare_pattern("f(??, d=?)"))
-        matches = list(apf.scan_ast(self.ast))
-        assert len(matches) == 4
-        assert_ast_like(matches[-1], ast.Call(kwargs=ast.Name(id='k')))
+        assert self.get_matching_names("?(??, d=?)") == ["f5", "f6", "f7", "f8"]
 
     def test_single_and_multi_wildcard(self):
-        apf = ASTPatternFinder(prepare_pattern("f(?, ??)"))
-        matches = list(apf.scan_ast(self.ast))
-        assert len(matches) == 5
-
+        assert self.get_matching_names("?(?, ??)") == ["f2", "f3", "f4", "f7", "f8"]
 
 # Test matching of function definitions ---------------------------------
 
